@@ -1,0 +1,54 @@
+---
+name: ci-build
+
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        description: Java version for setup-java
+        type: string
+        required: false
+        default: 11
+      publish_snapshots:
+        description: Whether to attempt publishing snapshots. When false, the workflow will only run build.
+        type: boolean
+        default: false
+        required: false
+    secrets:
+      ossrh_username:
+        required: false
+      ossrh_token:
+        required: false
+      ossrh_signing_key:
+        required: false
+      ossrh_signing_password:
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+          cache: 'maven'
+          server-id: ossrh
+          server-username: OSSRH_USERNAME
+          server-password: OSSRH_PASSWORD
+          gpg-private-key: ${{ secrets.ossrh_signing_key }}
+          gpg-passphrase: OSSRH_SIGNING_PASSWORD
+
+      - name: build
+        run: mvn --batch-mode --update-snapshots -P IT verify
+
+      - name: publish-snapshots
+        if: inputs.publish_snapshots && github.event_name != 'pull_request' && github.repository_owner == 'jqassistant-plugin'
+        run: mvn deploy --batch-mode
+        env:
+          OSSRH_USERNAME: ${{ secrets.ossrh_username }}
+          OSSRH_PASSWORD: ${{ secrets.ossrh_token }}
+          OSSRH_SIGNING_PASSWORD: ${{ secrets.ossrh_signing_password }}
